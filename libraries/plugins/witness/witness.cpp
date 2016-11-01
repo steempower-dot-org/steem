@@ -411,23 +411,6 @@ void witness_plugin::on_applied_block(const steemit::chain::signed_block& b)
   if( !_mining_threads || _miners.size() == 0 ) return;
   chain::database& db = database();
 
-   const auto& dgp = db.get_dynamic_global_properties();
-   double hps   = (_total_hashes*1000000)/(fc::time_point::now()-_hash_start_time).count();
-   int64_t bits    = (dgp.num_pow_witnesses/4) + 4;
-   fc::uint128 hashes  = fc::uint128(1) << bits;
-   hashes *= 1000000;
-   hps += 1;
-   hashes /= int64_t(hps*1000000);
-   auto seconds = hashes.to_uint64();
-   //double seconds = hashes/hps;
-   auto minutes = uint64_t(seconds / 60.0);
-
-
-   if( _total_hashes > 0 )
-      ilog( "hash rate: ${x} hps  target: ${t} queue: ${l} estimated time to produce: ${m} minutes",
-              ("x",uint64_t(hps)) ("t",bits) ("m", minutes ) ("l",dgp.num_pow_witnesses)
-         );
-
 
   _head_block_num = b.block_num();
   /// save these variables to be captured by worker lambda
@@ -450,6 +433,19 @@ void witness_plugin::on_applied_block(const steemit::chain::signed_block& b)
   } // for miner in miners
 
 } catch ( const fc::exception& e ) { ilog( "exception thrown while attempting to mine" ); }
+
+
+
+   double hps   = (_total_hashes*1000000)/(fc::time_point::now()-_hash_start_time).count();
+   hps += 1;
+
+
+   if( _total_hashes > 0 )
+      ilog( "hash rate: ${x} hps ",
+              ("x",uint64_t(hps))
+         );
+
+
 }
 
 void witness_plugin::start_mining(
@@ -482,6 +478,7 @@ void witness_plugin::start_mining(
     bool has_account = (acct_it != acct_idx.end());
     for( auto& t : _thread_pool )
     {
+       thread_num++;
        t->async( [=]()
        {
           chain::pow2_operation op;
@@ -507,7 +504,8 @@ void witness_plugin::start_mining(
 
              work.input.nonce += num_threads;
              work.create( block_id, miner, work.input.nonce );
-             if( work.pow_summary < target )
+	     
+             if( work.pow_summary < target)
              {
                 ++this->_head_block_num; /// signal other workers to stop
 
